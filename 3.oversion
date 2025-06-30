@@ -1,0 +1,78 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);  // Use 0x3F if 0x27 doesn't work
+
+// IR pins for slots 1, 2, 3, 5, 6
+int irPins[5] = { 17, 33, 25, 27, 14 };
+
+// Ultrasonic for slot 4
+#define TRIG_PIN 5
+#define ECHO_PIN 18
+
+String slotStatus[6];
+
+void setup() {
+  Wire.begin(23, 4);  // SDA = GPIO 23, SCL = GPIO 4
+  lcd.begin(16, 2);
+  lcd.backlight();
+
+  for (int i = 0; i < 5; i++) {
+    pinMode(irPins[i], INPUT);
+  }
+
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
+  lcd.setCursor(0, 0);
+  lcd.print("Smart Parking");
+  delay(2000);
+}
+
+float getDistanceCM() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000);  // Timeout 30ms
+  if (duration == 0) return 999;                   // No object detected
+
+  return duration * 0.034 / 2;
+}
+
+
+void loop() {
+  // Slot 1, 2, 3
+  slotStatus[0] = digitalRead(irPins[0]) == LOW ? "Full" : "Empty";
+  slotStatus[1] = digitalRead(irPins[1]) == LOW ? "Full" : "Empty";
+  slotStatus[2] = digitalRead(irPins[2]) == LOW ? "Full" : "Empty";
+
+  // Slot 4 – Ultrasonic
+  float dist = getDistanceCM();
+  Serial.print("Slot 4 Distance: ");
+  Serial.println(dist);
+  slotStatus[3] = (dist < 10) ? "Full" : "Empty";  // 3cm threshold
+
+  // Slot 5, 6
+  slotStatus[4] = digitalRead(irPins[3]) == LOW ? "Full" : "Empty";
+  slotStatus[5] = digitalRead(irPins[4]) == LOW ? "Full" : "Empty";
+
+  // Display 4 slots at a time
+  for (int i = 0; i < 6; i += 4) {
+    lcd.clear();
+
+    lcd.setCursor(0, 0);
+    lcd.print("S" + String(i + 1) + ":" + slotStatus[i] + " ");
+    if (i + 2 < 6)
+      lcd.print("S" + String(i + 3) + ":" + slotStatus[i + 2]);
+
+    lcd.setCursor(0, 1);
+    lcd.print("S" + String(i + 2) + ":" + slotStatus[i + 1] + " ");
+    if (i + 3 < 6)
+      lcd.print("S" + String(i + 4) + ":" + slotStatus[i + 3]);
+
+    delay(3000);
+  }
+}
